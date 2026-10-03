@@ -1,3 +1,8 @@
+// The shared sheet's web app URL and secret (not in git — see config.example.js)
+importScripts("config.js");
+// openEditor(), shared with the new tab page
+importScripts("editor.js");
+
 const MENU_ID = "underline-selection";
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -33,24 +38,31 @@ async function underline(tab, selectionText) {
     return;
   }
 
+  // With text selected the card opens to review it; with nothing selected it opens empty to type one in.
+  // Either way the card sends a "save" message back.
   const quote = clean(selectionText || (await readSelection(tab)));
-  if (!quote) {
-    notify(tab, "Select some text first", "error");
-    return;
-  }
-
-  // Let the reader review and edit first; the editor sends a "save" message back.
   if (await showEditor(tab, quote)) return;
 
-  // Page can't show the editor (PDF viewer, chrome:// pages) — save as-is
-  notify(tab, "Underlining…", "pending");
-  const result = await save(tab, quote);
-  notify(tab, result.message, result.state);
+  // The page can't show the card (Underline's own new tab, PDF viewer, chrome:// pages)
+  if (isUnderlineNewTab(tab)) {
+    chrome.runtime.sendMessage({ type: "compose", tabId: tab.id }).catch(() => {});
+  } else if (quote) {
+    notify(tab, "Underlining…", "pending");
+    const result = await save(tab, quote, true);
+    notify(tab, result.message, result.state);
+  } else {
+    chrome.tabs.create({ url: chrome.runtime.getURL("newtab.html#add") });
+  }
 }
 
-async function save(tab, rawQuote) {
+function isUnderlineNewTab(tab) {
+  const url = tab?.url || tab?.pendingUrl || "";
+  return url.startsWith("chrome://newtab") || url.startsWith(chrome.runtime.getURL("newtab.html"));
+}
+
+async function save(tab, rawQuote, withSource) {
   const settings = await getSettings();
-  if (!isConfigured(settings)) return { state: "error", message: "Finish setup in Underline settings" };
+  if (!isConfigured(settings)) return { state: "error", message: "Add your name in Underline settings" };
 
   const quote = clean(rawQuote);
   if (!quote) return { state: "error", message: "Nothing to save" };
@@ -59,15 +71,16 @@ async function save(tab, rawQuote) {
     quote,
     contributor_name: settings.name,
     social_link: settings.socialLink,
-    source_title: tab?.title || "",
-    source_url: tab?.url || "",
+    source_title: withSource ? tab?.title || "" : "",
+    source_url: withSource ? tab?.url || "" : "",
     added_at: new Date().toISOString()
   };
 
   try {
     const result = await send(settings, entry);
+    if (!result.duplicate) await showOnNextTab(entry);
     flushPending(settings);
-    return { state: "success", message: result.duplicate ? "Already in your list" : "Underlined" };
+    return { state: "success", message: result.duplicate ? "Already in the list" : "Underlined" };
   } catch (err) {
     if (!err.retryable) return { state: "error", message: err.message };
     await addPending(entry);
@@ -75,13 +88,21 @@ async function save(tab, rawQuote) {
   }
 }
 
+// The new tab page shows "next" first, and the cache keeps it in rotation until the next refresh.
+async function showOnNextTab({ quote, contributor_name, social_link, source_title, source_url }) {
+  const saved = { quote, contributor_name, social_link, source_title, source_url };
+  const { quotes = [] } = await chrome.storage.local.get("quotes");
+  await chrome.storage.local.set({ next: saved, quotes: [...quotes, saved] });
+}
+
 async function showEditor(tab, quote) {
-  if (!tab?.id) return false;
+  if (!tab?.id || isUnderlineNewTab(tab)) return false;
+  const { theme = "auto" } = await chrome.storage.sync.get("theme");
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: openEditor,
-      args: [quote, tab.title || ""]
+      args: [quote, tab.title || "", theme]
     });
     return true;
   } catch {
@@ -177,7 +198,7 @@ async function flushPending(settings) {
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (msg?.type === "save" && sender.tab) {
-    save(sender.tab, msg.quote).then(reply);
+    save(sender.tab, msg.quote, msg.withSource).then(reply);
     return true;
   }
   if (msg?.type === "flush") {
@@ -189,13 +210,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 // ---------- Settings ----------
 
 async function getSettings() {
-  const { endpoint = "", secret = "", name = "", socialLink = "" } =
-    await chrome.storage.sync.get(["endpoint", "secret", "name", "socialLink"]);
+  const { name = "", socialLink = "" } = await chrome.storage.sync.get(["name", "socialLink"]);
+  const { endpoint = "", secret = "" } = self.UNDERLINE_CONFIG || {};
   return { endpoint, secret, name, socialLink };
 }
 
 function isConfigured(settings) {
-  return Boolean(settings.endpoint && settings.secret);
+  return Boolean(settings.endpoint && settings.secret && settings.name);
 }
 
 // ---------- Feedback ----------
@@ -260,140 +281,4 @@ function showToast(message, state) {
   if (state !== "pending") {
     window.__underlineToastTimer = setTimeout(() => toast.classList.remove("show"), 2400);
   }
-}
-
-// Runs inside the page. Must be self-contained.
-function openEditor(quote, sourceTitle) {
-  const ID = "__underline_editor";
-  document.getElementById(ID)?.remove();
-
-  const host = document.createElement("div");
-  host.id = ID;
-  host.style.cssText = "all:initial;position:fixed;z-index:2147483647;right:24px;bottom:24px";
-  // Keep the page's own keyboard shortcuts (Medium, Substack, etc.) from firing while typing
-  for (const type of ["keydown", "keyup", "keypress"]) {
-    host.addEventListener(type, (e) => e.stopPropagation());
-  }
-
-  const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `
-    <style>
-      * { box-sizing: border-box; margin: 0; }
-      .card {
-        width: min(420px, calc(100vw - 48px));
-        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        color: #eaeae4; background: #111110;
-        border: 1px solid rgba(234,234,228,.14); border-radius: 14px;
-        padding: 16px; box-shadow: 0 18px 50px rgba(0,0,0,.4);
-        opacity: 0; transform: translateY(10px);
-        transition: opacity .2s ease, transform .2s ease;
-      }
-      .card.show { opacity: 1; transform: none; }
-      .head {
-        display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-        font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-        color: rgba(234,234,228,.5);
-      }
-      .mark { width: 18px; height: 2px; border-radius: 1px; background: #eaeae4; }
-      textarea {
-        display: block; width: 100%; min-height: 72px; resize: none;
-        font: 500 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        color: #eaeae4; background: #060606;
-        border: 1px solid rgba(234,234,228,.14); border-radius: 10px; padding: 10px 12px;
-      }
-      textarea:focus { outline: none; border-color: rgba(234,234,228,.45); }
-      textarea:disabled { opacity: .6; }
-      .source {
-        margin-top: 8px; font-size: 12px; color: rgba(234,234,228,.4);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      }
-      .foot { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-      .status { flex: 1; font-size: 12px; color: rgba(234,234,228,.45); }
-      .status.success { color: #9be29b; }
-      .status.error { color: #ff8a80; }
-      button {
-        font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        border-radius: 8px; padding: 9px 14px; cursor: pointer;
-        border: 1px solid #eaeae4; background: #eaeae4; color: #060606;
-      }
-      button.cancel { background: transparent; color: #eaeae4; border-color: rgba(234,234,228,.18); }
-      button:disabled { opacity: .5; cursor: default; }
-    </style>
-    <div class="card" role="dialog" aria-label="Underline">
-      <div class="head"><span class="mark"></span>Underline</div>
-      <textarea aria-label="Quote"></textarea>
-      <div class="source"></div>
-      <div class="foot">
-        <span class="status">Enter to save \u00b7 Esc to cancel</span>
-        <button class="cancel" type="button">Cancel</button>
-        <button class="save" type="button">Save</button>
-      </div>
-    </div>`;
-  document.documentElement.appendChild(host);
-
-  const $ = (sel) => root.querySelector(sel);
-  const card = $(".card");
-  const area = $("textarea");
-  const status = $(".status");
-  const saveBtn = $(".save");
-
-  area.value = quote;
-  $(".source").textContent = sourceTitle;
-
-  const fit = () => {
-    area.style.height = "auto";
-    area.style.height = Math.min(area.scrollHeight + 2, 320) + "px";
-  };
-  const close = () => {
-    card.classList.remove("show");
-    setTimeout(() => host.remove(), 200);
-  };
-  const setStatus = (text, state = "") => {
-    status.textContent = text;
-    status.className = "status " + state;
-  };
-
-  async function save() {
-    const text = area.value.replace(/\s+/g, " ").trim();
-    if (!text) return setStatus("Nothing to save", "error");
-
-    saveBtn.disabled = area.disabled = true;
-    setStatus("Saving\u2026");
-
-    let result;
-    try {
-      result = await chrome.runtime.sendMessage({ type: "save", quote: text });
-    } catch {
-      result = { state: "error", message: "Underline was updated \u2014 reload this page" };
-    }
-
-    setStatus(result.message, result.state);
-    if (result.state === "error") {
-      saveBtn.disabled = area.disabled = false;
-      area.focus();
-      return;
-    }
-    setTimeout(close, 1100);
-  }
-
-  area.addEventListener("input", fit);
-  area.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      save();
-    } else if (e.key === "Escape") {
-      close();
-    }
-  });
-  saveBtn.addEventListener("click", save);
-  $(".cancel").addEventListener("click", close);
-
-  // Re-measure whenever the card's width settles or changes
-  new ResizeObserver(fit).observe(card);
-
-  requestAnimationFrame(() => {
-    card.classList.add("show");
-    area.focus();
-    area.setSelectionRange(area.value.length, area.value.length);
-  });
 }

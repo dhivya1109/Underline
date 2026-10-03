@@ -1,9 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Underline",
-  "version": "1.0",
-  "description": "Select a line you love while reading. One action saves it to your list.",
-  "permissions": ["contextMenus", "storage", "activeTab", "scripting"],
+  "version": "1.1",
+  "description": "Underline lines you love while reading. They come back to you on every new tab.",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
   "host_permissions": [
     "https://script.google.com/*",
     "https://script.googleusercontent.com/*"
@@ -17,8 +22,13 @@
   "options_page": "options.html",
   "commands": {
     "underline-selection": {
-      "suggested_key": { "default": "Alt+Shift+U" },
+      "suggested_key": {
+        "default": "Alt+Shift+U"
+      },
       "description": "Underline the selected text"
     }
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
   }
 }

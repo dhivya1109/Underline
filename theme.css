@@ -1,0 +1,60 @@
+/* Shared colours for the new tab and settings pages. theme.js sets data-theme on <html>. */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121110;
+  --fg: #efe9dd;
+  --muted: rgba(239, 233, 221, 0.6);
+  --faint: rgba(239, 233, 221, 0.4);
+  --line: rgba(239, 233, 221, 0.14);
+  --field: #1b1a18;
+  --accent: #e5322d;
+  --ok: #9be29b;
+  --err: #ff8a80;
+  --mark: rgba(239, 233, 221, 0.06);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3efe6;
+  --fg: #141210;
+  --muted: rgba(20, 18, 16, 0.6);
+  --faint: rgba(20, 18, 16, 0.42);
+  --line: rgba(20, 18, 16, 0.14);
+  --field: #fffdf8;
+  --accent: #e5322d;
+  --ok: #2e7d32;
+  --err: #c62828;
+  --mark: rgba(20, 18, 16, 0.06);
+}
+
+html, body {
+  background-color: var(--bg);
+  color: var(--fg);
+}
+
+/* The logo: "underline", underlined in the text colour, with a red full stop */
+.wordmark {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: underline;
+  text-decoration-color: var(--fg);
+  text-decoration-thickness: 0.11em;
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+}
+
+.wordmark .dot {
+  display: inline-block;
+  width: 0.2em;
+  height: 0.2em;
+  margin-left: 0.07em;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Show the icon for the theme you'd switch TO */
+.theme-toggle .to-light { display: none; }
+:root[data-theme="dark"] .theme-toggle .to-light { display: block; }
+:root[data-theme="dark"] .theme-toggle .to-dark { display: none; }

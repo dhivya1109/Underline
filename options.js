@@ -1,5 +1,4 @@
-const FIELDS = ["name", "socialLink", "endpoint", "secret"];
-const ENDPOINT_PATTERN = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+const FIELDS = ["name", "socialLink"];
 
 const $ = (id) => document.getElementById(id);
 
@@ -8,24 +7,18 @@ function setStatus(text, kind = "") {
   $("status").className = kind;
 }
 
-function readForm() {
-  return Object.fromEntries(FIELDS.map((f) => [f, $(f).value.trim()]));
-}
-
-function validate(values) {
-  if (!ENDPOINT_PATTERN.test(values.endpoint)) {
-    return "The web app URL should look like https://script.google.com/macros/s/…/exec";
-  }
-  if (!values.secret) return "Add the secret from your Apps Script";
-  return "";
-}
-
 async function load() {
   const saved = await chrome.storage.sync.get(FIELDS);
   FIELDS.forEach((f) => ($(f).value = saved[f] || ""));
 
   const [command] = (await chrome.commands.getAll()).filter((c) => c.name === "underline-selection");
   $("shortcut").textContent = command?.shortcut || "no shortcut set";
+
+  const theme = window.underlineTheme.get();
+  document.querySelectorAll('input[name="theme"]').forEach((radio) => {
+    radio.checked = radio.value === theme;
+    radio.addEventListener("change", () => window.underlineTheme.set(radio.value));
+  });
 
   refreshPending();
 }
@@ -38,32 +31,10 @@ async function refreshPending() {
 
 $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const values = readForm();
-  const problem = validate(values);
-  if (problem) return setStatus(problem, "err");
+  const values = Object.fromEntries(FIELDS.map((f) => [f, $(f).value.trim()]));
+  if (!values.name) return setStatus("Add your name first", "err");
   await chrome.storage.sync.set(values);
-  setStatus("Saved", "ok");
-});
-
-$("test").addEventListener("click", async () => {
-  const values = readForm();
-  const problem = validate(values);
-  if (problem) return setStatus(problem, "err");
-
-  setStatus("Testing…");
-  try {
-    const res = await fetch(values.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ ping: true, secret: values.secret })
-    });
-    const data = await res.json().catch(() => null);
-    if (!data) return setStatus("Got a sign-in page — set the deployment's access to “Anyone”", "err");
-    if (!data.ok) return setStatus(data.error, "err");
-    setStatus("Connected", "ok");
-  } catch {
-    setStatus("Couldn't reach that URL", "err");
-  }
+  setStatus("Saved — you're ready to underline", "ok");
 });
 
 $("retry").addEventListener("click", async () => {

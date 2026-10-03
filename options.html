@@ -4,45 +4,46 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Underline — Settings</title>
+  <script src="theme.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="options.css" />
 </head>
 <body>
   <main>
-    <h1><span class="u">Underline</span></h1>
-    <p class="lede">Set this up once. After that, select any line while you read and press
-      <kbd id="shortcut">Alt+Shift+U</kbd>, click the toolbar icon, or right-click &rarr; Underline.</p>
+    <h1 class="wordmark">Underline<span class="dot"></span></h1>
+    <p class="lede">Select a line you love while reading and press <kbd id="shortcut">Alt+Shift+U</kbd>.
+      Edit it if you like, press Enter, and it joins the list everyone sees on their new tab.
+      Press the shortcut with nothing selected to type a quote in yourself.</p>
 
     <form id="form" autocomplete="off">
       <section>
         <h2>You</h2>
         <label>
           <span>Name</span>
-          <input id="name" type="text" placeholder="How you'll be credited" />
+          <input id="name" type="text" required maxlength="80" placeholder="Shown under every quote you save" />
         </label>
         <label>
-          <span>Social link <em>optional</em></span>
-          <input id="socialLink" type="url" placeholder="https://…" />
-        </label>
-      </section>
-
-      <section>
-        <h2>Your sheet</h2>
-        <label>
-          <span>Web app URL</span>
-          <input id="endpoint" type="url" required placeholder="https://script.google.com/macros/s/…/exec" />
-        </label>
-        <label>
-          <span>Secret</span>
-          <input id="secret" type="password" required placeholder="Same value as SECRET in the Apps Script" />
+          <span>LinkedIn profile <em>optional</em></span>
+          <input id="socialLink" type="url" maxlength="300" placeholder="https://www.linkedin.com/in/…" />
+          <small>People can click your name on a quote to visit it.</small>
         </label>
       </section>
 
       <div class="actions">
         <button type="submit">Save</button>
-        <button type="button" id="test" class="ghost">Test connection</button>
         <span id="status" role="status"></span>
       </div>
     </form>
+
+    <section>
+      <h2>Appearance</h2>
+      <div class="segmented" role="radiogroup" aria-label="Theme">
+        <label><input type="radio" name="theme" value="auto" /> <span>Match system</span></label>
+        <label><input type="radio" name="theme" value="dark" /> <span>Dark</span></label>
+        <label><input type="radio" name="theme" value="light" /> <span>Light</span></label>
+      </div>
+    </section>
 
     <section id="pending-box" hidden>
       <h2>Waiting to sync</h2>
