@@ -35,8 +35,10 @@
     <button id="logo" class="wordmark" type="button" aria-haspopup="menu" aria-expanded="false">Underline<span class="dot"></span></button>
     <div id="menu" class="menu" role="menu" hidden>
       <button type="button" role="menuitem" data-action="add">Add a quote</button>
+      <button type="button" role="menuitem" data-action="screenshot">Add from screenshot</button>
       <button type="button" role="menuitem" data-action="settings">Settings</button>
     </div>
+    <input id="screenshot-input" type="file" accept="image/*" hidden />
   </header>
 
   <main>
@@ -52,6 +54,8 @@
         <span class="wordmark small">Underline<span class="dot"></span></span>
         <span id="card-mode" class="muted">Add a quote</span>
       </div>
+      <!-- Lines read from a screenshot: tap the ones that make up the quote -->
+      <div id="card-lines" class="lines" hidden></div>
       <textarea id="card-text" rows="3" enterkeyhint="done" placeholder="Type or paste a line you want to keep…" aria-label="Quote"></textarea>
       <div id="card-source" class="muted small-text"></div>
       <div class="sheet-foot">
@@ -92,8 +96,9 @@
         <summary>How to install and use Underline</summary>
         <ul>
           <li><b>Laptop (Chrome or Edge):</b> click the install icon at the right of the address bar. To save a quote, copy it anywhere, open Underline and press <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
-          <li><b>Android:</b> browser menu → <i>Install app</i>. Then select text in any app → <i>Share</i> → <i>Underline</i>.</li>
-          <li><b>iPhone:</b> in Safari, <i>Share</i> → <i>Add to Home Screen</i>. To save, copy text, open Underline, tap <i>Underline.</i> → <i>Add a quote</i>.</li>
+          <li><b>Android:</b> browser menu → <i>Install app</i>. Then select text in any app, or take a screenshot, → <i>Share</i> → <i>Underline</i>.</li>
+          <li><b>iPhone:</b> in Safari, <i>Share</i> → <i>Add to Home Screen</i>. To save, tap <i>Underline.</i> → <i>Add a quote</i> (paste text) or <i>Add from screenshot</i>.</li>
+          <li><b>Screenshots</b> are read on your device and never uploaded. Tap the lines that make up your quote.</li>
           <li>Tap a quote to see the next one. Tap a name to open their LinkedIn.</li>
         </ul>
       </details>

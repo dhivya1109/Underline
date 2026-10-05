@@ -163,6 +163,10 @@ menu.addEventListener("click", (e) => {
   const action = e.target.dataset.action;
   toggleMenu(false);
   if (action === "add") openCard("");
+  if (action === "screenshot") {
+    if (!isSetUp()) return openSettings();
+    $("screenshot-input").click();
+  }
   if (action === "settings") openSettings();
 });
 document.addEventListener("click", () => toggleMenu(false));
@@ -194,11 +198,13 @@ function showCount() {
   else setCardStatus(`${n} / ${MAX_QUOTE_LENGTH}`);
 }
 
-function openCard(text, source = { title: "", url: "" }) {
+function openCard(text, source = { title: "", url: "" }, mode) {
   if (!isSetUp()) return openSettings();
   cardSource = source;
   cardText.value = clean(text);
-  $("card-mode").textContent = text ? "Review" : "Add a quote";
+  linesEl.hidden = true;
+  linesEl.replaceChildren();
+  $("card-mode").textContent = mode || (text ? "Review" : "Add a quote");
   $("card-source").textContent = source.title ? "From " + source.title : "";
   cardLayer.hidden = false;
   showCount();
@@ -253,13 +259,121 @@ cardText.addEventListener("keydown", (e) => {
   }
 });
 
-// Laptop: copy a line anywhere, open Underline, press Ctrl+V
+// Laptop: copy a line (or a screenshot) anywhere, open Underline, press Ctrl+V
 document.addEventListener("paste", (e) => {
   if (!cardLayer.hidden || !$("settings-layer").hidden) return;
+  const image = e.clipboardData && [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
+  if (image) {
+    e.preventDefault();
+    return readScreenshot(image);
+  }
   const text = e.clipboardData && e.clipboardData.getData("text");
   if (!text) return;
   e.preventDefault();
   openCard(text);
+});
+
+// ---------- Screenshots ----------
+// The text is read on the device with Tesseract.js (open source); the image is never uploaded.
+
+const linesEl = $("card-lines");
+const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+let tesseractLoading = null;
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!tesseractLoading) {
+    tesseractLoading = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = TESSERACT_URL;
+      script.onload = () => resolve(window.Tesseract);
+      script.onerror = () => {
+        tesseractLoading = null;
+        reject(new Error("Couldn't load the text reader — check your internet"));
+      };
+      document.head.append(script);
+    });
+  }
+  return tesseractLoading;
+}
+
+async function readScreenshot(image, source = { title: "", url: "" }) {
+  if (!isSetUp()) return openSettings();
+  openCard("", source, "From screenshot");
+  setCardStatus("Reading the screenshot… the first time takes a moment");
+  try {
+    const Tesseract = await loadTesseract();
+    const { data } = await Tesseract.recognize(image, "eng");
+    if (cardLayer.hidden) return; // closed while reading
+    // Keep real lines of text; drop clock times, battery levels and other screen clutter
+    const lines = (data.lines || [])
+      .map((line) => line.text.replace(/\s+/g, " ").trim())
+      .filter((line) => (line.match(/[a-z]/gi) || []).length >= 3);
+    showLines(lines);
+  } catch (err) {
+    setCardStatus(err.message || "Couldn't read that image", "err");
+  }
+}
+
+function showLines(lines) {
+  if (!lines.length) return setCardStatus("No text found in that image", "err");
+  const picked = new Set();
+  linesEl.replaceChildren(
+    ...lines.map((line, i) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = line;
+      button.setAttribute("aria-pressed", "false");
+      button.addEventListener("click", () => {
+        picked.has(i) ? picked.delete(i) : picked.add(i);
+        button.setAttribute("aria-pressed", String(picked.has(i)));
+        cardText.value = joinLines([...picked].sort((a, b) => a - b).map((n) => lines[n]));
+        showCount();
+      });
+      return button;
+    })
+  );
+  linesEl.hidden = false;
+  linesEl.scrollTop = 0;
+  setCardStatus("Tap the lines of your quote, then edit if needed");
+}
+
+// Join lines back into one sentence, mending words split with a hyphen at a line break
+function joinLines(lines) {
+  return clean(lines.reduce((text, line) => (/[a-z]-$/i.test(text) ? text.slice(0, -1) + line : text + " " + line), ""));
+}
+
+$("screenshot-input").addEventListener("change", (e) => {
+  const image = e.target.files && e.target.files[0];
+  e.target.value = ""; // so choosing the same file again still works
+  if (image) readScreenshot(image);
+});
+
+// Laptop: drag a screenshot onto the page
+let dropHint = null;
+document.addEventListener("dragover", (e) => {
+  if (![...e.dataTransfer.items].some((item) => item.type.startsWith("image/"))) return;
+  e.preventDefault();
+  if (!dropHint) {
+    dropHint = Object.assign(document.createElement("div"), { className: "drop-hint", textContent: "Drop the screenshot to read it" });
+    document.body.append(dropHint);
+  }
+});
+document.addEventListener("dragleave", (e) => {
+  if (e.relatedTarget === null && dropHint) {
+    dropHint.remove();
+    dropHint = null;
+  }
+});
+document.addEventListener("drop", (e) => {
+  if (dropHint) {
+    dropHint.remove();
+    dropHint = null;
+  }
+  const image = [...e.dataTransfer.files].find((f) => f.type.startsWith("image/"));
+  if (!image) return;
+  e.preventDefault();
+  readScreenshot(image);
 });
 
 // ---------- Settings ----------
@@ -367,9 +481,17 @@ async function start() {
     return;
   }
 
-  // Android "Share → Underline" opens the app with the shared text in the address
+  // Android "Share → Underline": sw.js receives the share and opens the app with it in the address
   const params = new URLSearchParams(location.search);
-  if (params.has("text") || params.has("title") || params.has("url")) {
+  if (params.has("image")) {
+    history.replaceState(null, "", location.pathname);
+    const cache = await caches.open("underline-share");
+    const shared = await cache.match("shared-image");
+    if (shared) {
+      await cache.delete("shared-image");
+      readScreenshot(await shared.blob(), { title: params.get("title") || "", url: params.get("url") || "" });
+    }
+  } else if (params.has("text") || params.has("title") || params.has("url")) {
     let text = params.get("text") || "";
     let url = params.get("url") || "";
     // Some apps put the page link inside the text; pull it out
