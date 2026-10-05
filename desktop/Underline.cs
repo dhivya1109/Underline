@@ -473,30 +473,48 @@ namespace Underline
     // The "Underline." wordmark: text, an underline in the text colour, and a red dot
     class Wordmark : Control
     {
+        const string Word = "Underline";
+
+        // Measured from the font itself so the underline matches the letters exactly
+        // and the dot sits on the baseline like a full stop, as on the new tab.
+        readonly float textWidth, baseline;
+
         public Wordmark(Color fg, float px)
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
             ForeColor = fg;
             Font = new Font("Segoe UI", px, FontStyle.Bold, GraphicsUnit.Pixel);
-            Size textSize = TextRenderer.MeasureText("Underline", Font, Size.Empty, TextFormatFlags.NoPadding);
-            Size = new Size(textSize.Width + (int)(px * 0.4f), textSize.Height + (int)(px * 0.35f));
+
+            using (var bmp = new Bitmap(1, 1))
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                textWidth = g.MeasureString(Word, Font, PointF.Empty, StringFormat.GenericTypographic).Width;
+            }
+            FontFamily family = Font.FontFamily;
+            baseline = px * family.GetCellAscent(FontStyle.Bold) / family.GetEmHeight(FontStyle.Bold);
+
+            Size = new Size((int)Math.Ceiling(textWidth + px * 0.35f), (int)Math.Ceiling(baseline + px * 0.36f));
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            Size textSize = TextRenderer.MeasureText("Underline", Font, Size.Empty, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(e.Graphics, "Underline", Font, Point.Empty, ForeColor, TextFormatFlags.NoPadding);
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
             float px = Font.Size;
-            int thickness = Math.Max(2, (int)(px * 0.11f));
+
             using (var brush = new SolidBrush(ForeColor))
             {
-                e.Graphics.FillRectangle(brush, 0, textSize.Height + (int)(px * 0.08f), textSize.Width, thickness);
+                g.DrawString(Word, Font, brush, 0, 0, StringFormat.GenericTypographic);
+                // Underline: 0.11em thick, 0.2em below the baseline, the width of the word
+                g.FillRectangle(brush, 0, baseline + px * 0.2f, textWidth, Math.Max(2f, px * 0.11f));
             }
+
+            // Red dot: 0.2em wide, just after the "e", resting on the baseline
             float dot = Math.Max(3f, px * 0.2f);
             using (var red = new SolidBrush(Palette.Accent))
             {
-                e.Graphics.FillEllipse(red, textSize.Width + px * 0.06f, textSize.Height - dot - px * 0.12f, dot, dot);
+                g.FillEllipse(red, textWidth + px * 0.07f, baseline - dot, dot, dot);
             }
         }
     }
@@ -604,6 +622,8 @@ namespace Underline
 
     class EditorForm : CardForm
     {
+        const int MaxQuoteLength = 85; // two lines at full size on the new tab; matches the Chrome extension
+
         readonly Settings settings;
         readonly string sourceTitle;
         readonly TextBox box;
@@ -634,8 +654,7 @@ namespace Underline
                 BorderStyle = BorderStyle.None,
                 ScrollBars = ScrollBars.None,
                 Font = new Font("Segoe UI Semibold", 12f),
-                Text = quote,
-                MaxLength = 1000
+                Text = quote
             };
             Panel field = MakeField(box, Px(104));
             field.SetBounds(pad, mark.Bottom + Px(12), width - pad * 2, Px(104));
@@ -662,7 +681,6 @@ namespace Underline
 
             status = new Label
             {
-                Text = "Enter to save · Esc to cancel",
                 ForeColor = P.Muted,
                 Font = new Font("Segoe UI", 8.5f),
                 AutoEllipsis = true,
@@ -684,7 +702,9 @@ namespace Underline
             save.Click += delegate { Save(); };
             cancel.Click += delegate { Close(); };
             box.KeyDown += OnBoxKeyDown;
+            box.TextChanged += delegate { if (!saving) ShowCount(); };
             KeyDown += delegate(object s, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) Close(); };
+            ShowCount();
 
             PlaceBottomRight();
             Shown += delegate
@@ -715,6 +735,16 @@ namespace Underline
             status.ForeColor = color;
         }
 
+        // Live character count, red when over the limit
+        void ShowCount()
+        {
+            int n = QuoteText.Clean(box.Text).Length;
+            if (n > MaxQuoteLength)
+                SetStatus(n + " / " + MaxQuoteLength + " — trim it to fit two lines", P.Err);
+            else
+                SetStatus(n + " / " + MaxQuoteLength + " · Enter to save", P.Muted);
+        }
+
         async void Save()
         {
             if (saving) return;
@@ -722,6 +752,11 @@ namespace Underline
             if (quote.Length == 0)
             {
                 SetStatus("Write something first", P.Err);
+                return;
+            }
+            if (quote.Length > MaxQuoteLength)
+            {
+                ShowCount();
                 return;
             }
 
@@ -807,12 +842,15 @@ namespace Underline
             Controls.Add(startup);
             y = startup.Bottom + Px(18);
 
+            // Messages get their own full-width line so they're never cut off
+            status = new Label { ForeColor = P.Muted, TextAlign = ContentAlignment.MiddleLeft };
+            status.SetBounds(pad, y, inner, Px(22));
+            y = status.Bottom + Px(8);
+
             Button saveButton = MakeButton("Save", true);
             Button closeButton = MakeButton("Close", false);
             saveButton.Location = new Point(width - pad - saveButton.Width, y);
             closeButton.Location = new Point(saveButton.Left - Px(8) - closeButton.Width, y);
-            status = new Label { ForeColor = P.Muted, TextAlign = ContentAlignment.MiddleLeft };
-            status.SetBounds(pad, y, closeButton.Left - pad - Px(8), saveButton.Height);
 
             Controls.Add(mark);
             Controls.Add(intro);
@@ -857,10 +895,16 @@ namespace Underline
                 name.Focus();
                 return;
             }
+            // Accept "www.linkedin.com/in/..." or "linkedin.com/in/..." and add the https:// for them
             if (link.Length > 0 && !Regex.IsMatch(link, "^https?://", RegexOptions.IgnoreCase))
             {
+                link = "https://" + link;
+                linkedin.Text = link;
+            }
+            if (link.Length > 0 && !Regex.IsMatch(link, @"^https?://[^\s/]+\.[^\s]+$", RegexOptions.IgnoreCase))
+            {
                 status.ForeColor = P.Err;
-                status.Text = "LinkedIn should start with https://";
+                status.Text = "That doesn't look like a link — check your LinkedIn URL";
                 linkedin.Focus();
                 return;
             }

@@ -7,6 +7,7 @@
 // themePref:   "dark" | "light" | "auto"
 function openEditor(quote, sourceTitle, themePref) {
   const ID = "__underline_editor";
+  const MAX_LENGTH = 85; // fits two lines at full size on the new tab
   document.getElementById(ID)?.remove();
 
   const dark =
@@ -27,8 +28,10 @@ function openEditor(quote, sourceTitle, themePref) {
 
   const font = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
   const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `
-    <style>
+  // Styles go in via textContent and the markup has no interpolated values,
+  // so nothing dynamic is ever parsed as HTML.
+  const style = document.createElement("style");
+  style.textContent = `
       * { box-sizing: border-box; margin: 0; }
       .card {
         width: min(440px, calc(100vw - 48px));
@@ -68,8 +71,8 @@ function openEditor(quote, sourceTitle, themePref) {
         border: 1px solid ${c.fg}; background: ${c.fg}; color: ${c.card};
       }
       button.cancel { background: transparent; color: ${c.fg}; border-color: ${c.line}; }
-      button:disabled { opacity: .5; cursor: default; }
-    </style>
+      button:disabled { opacity: .5; cursor: default; }`;
+  root.innerHTML = `
     <div class="card" role="dialog" aria-label="Underline">
       <div class="head">
         <span class="wordmark">Underline<span class="dot"></span></span>
@@ -83,6 +86,7 @@ function openEditor(quote, sourceTitle, themePref) {
         <button class="save" type="button">Save</button>
       </div>
     </div>`;
+  root.prepend(style);
   document.documentElement.appendChild(host);
 
   const $ = (sel) => root.querySelector(sel);
@@ -109,10 +113,18 @@ function openEditor(quote, sourceTitle, themePref) {
     status.textContent = text;
     status.className = "status " + state;
   };
+  const cleanText = () => area.value.replace(/\s+/g, " ").trim();
+  // Live character count, red when over the limit
+  const showCount = () => {
+    const n = cleanText().length;
+    if (n > MAX_LENGTH) setStatus(`${n} / ${MAX_LENGTH} — trim it to fit two lines`, "error");
+    else setStatus(`${n} / ${MAX_LENGTH} · Enter to save`);
+  };
 
   async function save() {
-    const text = area.value.replace(/\s+/g, " ").trim();
+    const text = cleanText();
     if (!text) return setStatus("Write something first", "error");
+    if (text.length > MAX_LENGTH) return showCount();
 
     saveBtn.disabled = area.disabled = true;
     setStatus("Saving…");
@@ -133,7 +145,10 @@ function openEditor(quote, sourceTitle, themePref) {
     setTimeout(close, 1100);
   }
 
-  area.addEventListener("input", fit);
+  area.addEventListener("input", () => {
+    fit();
+    showCount();
+  });
   area.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -148,6 +163,7 @@ function openEditor(quote, sourceTitle, themePref) {
   // Re-measure whenever the card's width settles or changes
   new ResizeObserver(fit).observe(card);
 
+  showCount();
   requestAnimationFrame(() => {
     card.classList.add("show");
     area.focus();

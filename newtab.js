@@ -1,11 +1,17 @@
 // Ask the sheet for fresh quotes at most this often; new tabs in between use the cache.
 const REFRESH_EVERY_MS = 10 * 60 * 1000;
 
+// Quotes up to this length fit in two lines at full size. Longer ones (saved before the limit) are skipped.
+const MAX_QUOTE_LENGTH = 85;
+
 const quoteEl = document.getElementById("quote");
 const byEl = document.getElementById("by");
 
 async function main() {
-  const { quotes = [], queue = [], next = null } = await chrome.storage.local.get(["quotes", "queue", "next"]);
+  const stored = await chrome.storage.local.get(["quotes", "queue", "next"]);
+  const quotes = fitting(stored.quotes || []);
+  const queue = stored.queue || [];
+  const next = stored.next || null;
 
   if (next) {
     // Something was just underlined — show it first.
@@ -21,13 +27,17 @@ async function main() {
 
   if (location.hash === "#add") compose();
 
-  const fresh = await refresh(quotes.length === 0);
+  const fresh = fitting((await refresh(quotes.length === 0)) || []);
   if (!quotes.length && !next && fresh?.length) {
     // First run: the cache was empty, so show a quote as soon as they arrive.
     const picked = pick(fresh, []);
     render(picked.quote);
     await chrome.storage.local.set({ queue: picked.queue });
   }
+}
+
+function fitting(quotes) {
+  return quotes.filter((q) => q.quote && q.quote.length <= MAX_QUOTE_LENGTH);
 }
 
 // Work through a shuffled queue of quote texts so nothing repeats until all have been shown.
@@ -52,7 +62,7 @@ function shuffle(items) {
 
 function render(q) {
   quoteEl.textContent = q.quote;
-  quoteEl.className = q.quote.length > 280 ? "long" : q.quote.length > 120 ? "medium" : "";
+  quoteEl.className = "";
 
   // Who sent it — their name opens their LinkedIn (social_link) when there is one
   byEl.replaceChildren();

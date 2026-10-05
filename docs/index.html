@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Underline</title>
+  <meta name="description" content="Lines worth keeping, underlined by friends." />
+  <meta name="theme-color" content="#121110" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <script>
+    // Apply the saved theme before the first paint so there's no flash
+    (function () {
+      var pref = "auto";
+      try { pref = JSON.parse(localStorage.getItem("underline:theme")) || "auto"; } catch (e) {}
+      var light = pref === "light" || (pref === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
+      document.documentElement.dataset.theme = light ? "light" : "dark";
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div class="grain"></div>
+  <div class="mark mark-top" aria-hidden="true">“</div>
+  <div class="mark mark-bottom" aria-hidden="true">”</div>
+
+  <header class="bar">
+    <button id="logo" class="wordmark" type="button" aria-haspopup="menu" aria-expanded="false">Underline<span class="dot"></span></button>
+    <div id="menu" class="menu" role="menu" hidden>
+      <button type="button" role="menuitem" data-action="add">Add a quote</button>
+      <button type="button" role="menuitem" data-action="settings">Settings</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="quote" aria-live="polite"></p>
+  </main>
+
+  <p id="by"></p>
+
+  <!-- Add / review a quote -->
+  <div id="card-layer" class="layer" hidden>
+    <form id="card" class="sheet" autocomplete="off">
+      <div class="sheet-head">
+        <span class="wordmark small">Underline<span class="dot"></span></span>
+        <span id="card-mode" class="muted">Add a quote</span>
+      </div>
+      <textarea id="card-text" rows="3" enterkeyhint="done" placeholder="Type or paste a line you want to keep…" aria-label="Quote"></textarea>
+      <div id="card-source" class="muted small-text"></div>
+      <div class="sheet-foot">
+        <span id="card-status" class="status"></span>
+        <button type="button" class="btn ghost" data-close>Cancel</button>
+        <button type="submit" class="btn">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Settings / first-run setup -->
+  <div id="settings-layer" class="layer" hidden>
+    <form id="settings" class="sheet wide" autocomplete="off">
+      <span class="wordmark big">Underline<span class="dot"></span></span>
+      <p id="settings-intro" class="muted">Lines worth keeping, underlined by friends.</p>
+
+      <label>
+        <span>Your name</span>
+        <input id="s-name" type="text" maxlength="80" placeholder="Shown under every quote you save" required />
+      </label>
+      <label>
+        <span>LinkedIn profile <em>optional</em></span>
+        <input id="s-linkedin" type="text" maxlength="300" placeholder="linkedin.com/in/…" />
+      </label>
+      <label>
+        <span>Invite code</span>
+        <input id="s-code" type="password" maxlength="200" placeholder="The code your friend gave you" required />
+      </label>
+
+      <fieldset class="segmented">
+        <legend>Appearance</legend>
+        <label><input type="radio" name="theme" value="auto" /><span>Match device</span></label>
+        <label><input type="radio" name="theme" value="dark" /><span>Dark</span></label>
+        <label><input type="radio" name="theme" value="light" /><span>Light</span></label>
+      </fieldset>
+
+      <details class="help">
+        <summary>How to install and use Underline</summary>
+        <ul>
+          <li><b>Laptop (Chrome or Edge):</b> click the install icon at the right of the address bar. To save a quote, copy it anywhere, open Underline and press <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+          <li><b>Android:</b> browser menu → <i>Install app</i>. Then select text in any app → <i>Share</i> → <i>Underline</i>.</li>
+          <li><b>iPhone:</b> in Safari, <i>Share</i> → <i>Add to Home Screen</i>. To save, copy text, open Underline, tap <i>Underline.</i> → <i>Add a quote</i>.</li>
+          <li>Tap a quote to see the next one. Tap a name to open their LinkedIn.</li>
+        </ul>
+      </details>
+
+      <div class="sheet-foot">
+        <span id="settings-status" class="status"></span>
+        <button type="button" class="btn ghost" data-close>Close</button>
+        <button type="submit" class="btn">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -24,6 +24,20 @@ Every new tab shows one saved quote with **— Name** in the bottom left. Clicki
 
 Switch between light and dark with the button in the bottom left, or under **Appearance** in settings.
 
+## The Underline app (phones and laptops)
+
+One app for every device, in [`docs/`](docs/). It's a web app that installs like a normal app:
+
+- **Laptop (Chrome or Edge):** open the link and click the install icon in the address bar. To save a quote, copy it anywhere, open Underline and press **Ctrl+V**.
+- **Android:** open the link, then browser menu → **Install app**. Select text in any app → **Share** → **Underline**.
+- **iPhone:** open the link in Safari, then **Share** → **Add to Home Screen**. To save, copy text, open Underline, tap **Underline.** → **Add a quote**.
+
+Tap a quote to see the next one. Tap a name to open their LinkedIn.
+
+On first use it asks for a name and an **invite code**, which is the Apps Script `SECRET`. The code is never stored in this repo: share it privately with friends. `docs/config.js` holds only the web app URL, which is useless without the code.
+
+**Hosting:** GitHub Pages serves the `docs/` folder. In the repo on GitHub, open **Settings → Pages**, set **Source** to *Deploy from a branch*, choose **main** and **/docs**, and save. The app is then at `https://<username>.github.io/Underline/`. When you change app files, bump `VERSION` in `docs/sw.js` so installed copies update.
+
 ## Outside Chrome: the Windows app
 
 Chrome extensions only work inside Chrome. For the Kindle app, Word, PDF readers and everything else, there's a small Windows app in [`desktop/`](desktop/).
