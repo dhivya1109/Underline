@@ -54,7 +54,3 @@ html, body {
   background: var(--accent);
 }
 
-/* Show the icon for the theme you'd switch TO */
-.theme-toggle .to-light { display: none; }
-:root[data-theme="dark"] .theme-toggle .to-light { display: block; }
-:root[data-theme="dark"] .theme-toggle .to-dark { display: none; }

@@ -24,6 +24,20 @@ Every new tab shows one saved quote with **— Name** in the bottom left. Clicki
 
 Switch between light and dark with the button in the bottom left, or under **Appearance** in settings.
 
+## Outside Chrome: the Windows app
+
+Chrome extensions only work inside Chrome. For the Kindle app, Word, PDF readers and everything else, there's a small Windows app in [`desktop/`](desktop/).
+
+Select text in any app and press **Ctrl+Shift+U**. The app copies the selection, shows the same review card, and saves to the same sheet. With nothing selected, the card opens empty so you can type a quote. It lives in the system tray by the clock: click the icon to add a quote, or right-click it for settings.
+
+**Build it** (no installs needed; it uses the C# compiler that comes with Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktopuild.ps1
+```
+
+This reads the web app URL and secret from `config.js` and writes `desktopuildUnderline.exe`, a single file you can share. On first run it asks for your name and LinkedIn, and can start itself with Windows. Windows may warn that the app is unrecognised because it isn't code-signed: click **More info → Run anyway**.
+
 ## How it's shared
 
 Everyone who installs Underline saves into **one shared sheet**, owned by the person who sets it up. Each quote is credited with the name the reader enters in Underline's settings. Readers only type their name; the sheet details are built into the extension.

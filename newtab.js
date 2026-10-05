@@ -111,13 +111,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// ---------- Theme ----------
-
-document.getElementById("theme").addEventListener("click", () => {
-  const theme = window.underlineTheme;
-  theme.set(theme.resolved() === "dark" ? "light" : "dark");
-});
-
 // ---------- Fetching ----------
 
 async function refresh(force) {
