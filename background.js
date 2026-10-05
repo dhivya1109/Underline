@@ -1,10 +1,15 @@
-// The shared sheet's web app URL and secret (not in git — see config.example.js)
-importScripts("config.js");
-// openEditor(), shared with the new tab page
-importScripts("editor.js");
+// Chrome, Edge and other Chromium browsers run this as a service worker and load the helpers here.
+// Firefox lists them in its manifest instead (see package.ps1), where importScripts doesn't exist.
+if (typeof importScripts === "function") {
+  // The shared sheet's web app URL and secret (not in git — see config.example.js)
+  importScripts("config.js");
+  // openEditor(), shared with the new tab page
+  importScripts("editor.js");
+}
 
 const MENU_ID = "underline-selection";
 const REQUEST_TIMEOUT_MS = 15000;
+const MAX_QUOTE_LENGTH = 85; // two lines at full size on the new tab; matches editor.js
 
 // ---------- Entry points: right-click menu, keyboard shortcut, toolbar icon ----------
 
@@ -57,7 +62,12 @@ async function underline(tab, selectionText) {
 
 function isUnderlineNewTab(tab) {
   const url = tab?.url || tab?.pendingUrl || "";
-  return url.startsWith("chrome://newtab") || url.startsWith(chrome.runtime.getURL("newtab.html"));
+  return (
+    url.startsWith("chrome://newtab") ||  // Chrome
+    url.startsWith("edge://newtab") ||    // Edge
+    url.startsWith("about:newtab") ||     // Firefox
+    url.startsWith(chrome.runtime.getURL("newtab.html"))
+  );
 }
 
 async function save(tab, rawQuote, withSource) {
@@ -66,6 +76,9 @@ async function save(tab, rawQuote, withSource) {
 
   const quote = clean(rawQuote);
   if (!quote) return { state: "error", message: "Nothing to save" };
+  if (quote.length > MAX_QUOTE_LENGTH) {
+    return { state: "error", message: `Keep it under ${MAX_QUOTE_LENGTH} characters so it fits two lines` };
+  }
 
   const entry = {
     quote,

@@ -33,6 +33,16 @@ $("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const values = Object.fromEntries(FIELDS.map((f) => [f, $(f).value.trim()]));
   if (!values.name) return setStatus("Add your name first", "err");
+
+  // Accept "www.linkedin.com/in/..." or "linkedin.com/in/..." and add the https:// for them
+  if (values.socialLink && !/^https?:\/\//i.test(values.socialLink)) {
+    values.socialLink = "https://" + values.socialLink;
+    $("socialLink").value = values.socialLink;
+  }
+  if (values.socialLink && !/^https?:\/\/[^\s/]+\.\S+$/i.test(values.socialLink)) {
+    return setStatus("That doesn't look like a link — check your LinkedIn URL", "err");
+  }
+
   await chrome.storage.sync.set(values);
   setStatus("Saved — you're ready to underline", "ok");
 });
