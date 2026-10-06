@@ -50,7 +50,13 @@ async function call(payload) {
     throw new Error("Couldn't reach Google — check your internet");
   }
   const data = await res.json().catch(() => null);
-  if (!data) throw new Error("Unexpected reply from Google");
+  if (!data) {
+    // Seen on Android: the save goes through but the reply arrives garbled.
+    // Mark it so the caller can check the sheet instead of reporting a failure.
+    const err = new Error("Unexpected reply from Google");
+    err.unclear = true;
+    throw err;
+  }
   if (!data.ok) {
     throw new Error(/secret/i.test(data.error || "") ? "That invite code isn't right" : data.error || "Something went wrong");
   }
@@ -234,19 +240,35 @@ $("card").addEventListener("submit", async (e) => {
 
   saving = true;
   setCardStatus("Saving…");
-  try {
-    const result = await call(entry);
-    setCardStatus(result.duplicate ? "Already in the list" : "Underlined", "ok");
-    if (!result.duplicate) {
+  const saved = (duplicate) => {
+    setCardStatus(duplicate ? "Already in the list" : "Underlined", "ok");
+    if (!duplicate) {
       store.set("quotes", [...store.get("quotes", []), entry]);
       render(entry);
     }
     setTimeout(closeCard, 900);
+  };
+  try {
+    const result = await call(entry);
+    saved(result.duplicate);
   } catch (err) {
+    if (err.unclear && (await isInSheet(quote))) return saved(false);
     saving = false;
     setCardStatus(err.message, "err");
   }
 });
+
+// After an unclear reply, look for the quote in the sheet to see whether the save went through
+async function isInSheet(quote) {
+  setCardStatus("Checking…");
+  try {
+    const data = await call({ action: "list" });
+    const target = quote.toLowerCase();
+    return (data.quotes || []).some((q) => clean(q.quote).toLowerCase() === target);
+  } catch {
+    return false;
+  }
+}
 
 cardText.addEventListener("input", showCount);
 cardText.addEventListener("keydown", (e) => {
