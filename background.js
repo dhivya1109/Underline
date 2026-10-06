@@ -91,9 +91,11 @@ async function save(tab, rawQuote, withSource) {
 
   try {
     const result = await send(settings, entry);
-    if (!result.duplicate) await showOnNextTab(entry);
+    // Quotes waiting for the admin's review aren't shown until they're approved
+    if (!result.duplicate && !result.pending) await showOnNextTab(entry);
     flushPending(settings);
-    return { state: "success", message: result.duplicate ? "Already in the list" : "Underlined" };
+    const message = result.duplicate ? "Already in the list" : result.pending ? "Sent for review" : "Underlined";
+    return { state: "success", message };
   } catch (err) {
     if (!err.retryable) return { state: "error", message: err.message };
     await addPending(entry);

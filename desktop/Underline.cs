@@ -234,7 +234,8 @@ namespace Underline
                 if (data.ContainsKey("ok") && true.Equals(data["ok"]))
                 {
                     bool duplicate = data.ContainsKey("duplicate") && true.Equals(data["duplicate"]);
-                    return new Result("success", duplicate ? "Already in the list" : "Underlined");
+                    bool pending = data.ContainsKey("pending") && true.Equals(data["pending"]);
+                    return new Result("success", duplicate ? "Already in the list" : pending ? "Sent for review" : "Underlined");
                 }
                 return new Result("error", data.ContainsKey("error") ? Convert.ToString(data["error"]) : "Something went wrong");
             });

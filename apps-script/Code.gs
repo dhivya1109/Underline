@@ -6,8 +6,16 @@
  * See README.md for the full steps.
  */
 
-// Any long random string. Put the same value in the extension's config.js.
+// The invite code friends type into the app (any long random string).
+// Quotes sent with it wait for your review before anyone sees them.
 const SECRET = "change-me-to-something-long-and-random";
+
+// Your own code, different from SECRET and known only to you.
+// Quotes sent with it go live straight away.
+const ADMIN_SECRET = "change-me-to-a-different-long-random-string";
+
+// Where "new quote to review" emails go. Leave empty to use the Google account that owns this script.
+const REVIEW_EMAIL = "";
 
 // The tab to write into, by its gid (the number after "gid=" in the sheet URL).
 // Leave as null to use the first tab.
@@ -23,9 +31,11 @@ const DUPLICATE_OVERLAP = 0.6;
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    if (data.secret !== SECRET) return json({ ok: false, error: "Secret doesn't match the Apps Script" });
-    if (data.ping) return json({ ok: true });
+    const isAdmin = data.secret === ADMIN_SECRET;
+    if (!isAdmin && data.secret !== SECRET) return json({ ok: false, error: "Secret doesn't match the Apps Script" });
+    if (data.ping) return json({ ok: true, admin: isAdmin });
     if (data.action === "list") return json({ ok: true, quotes: listQuotes() });
+    if (data.action === "check") return json(checkQuote(String(data.quote || "")));
 
     const quote = String(data.quote || "").trim();
     if (!quote) return json({ ok: false, error: "Nothing to save" });
@@ -45,24 +55,91 @@ function doPost(e) {
       if (isDuplicate(sheet, quoteCol, quote)) return json({ ok: true, duplicate: true });
 
       // Fill only the columns the sheet actually has, matched by header name.
+      // Friends' quotes start inactive: tick "active" in the sheet to publish them.
       const values = {
         quote: quote,
         contributor_name: text(data.contributor_name, 80),
         social_link: webLink(data.social_link),
-        active: true,
+        active: isAdmin,
         source_title: text(data.source_title, 300),
         source_url: webLink(data.source_url),
         added_at: data.added_at ? new Date(data.added_at) : new Date()
       };
       sheet.appendRow(headers.map((h) => (h in values ? values[h] : "")));
+      makeCheckbox(sheet, headers, sheet.getLastRow(), isAdmin);
     } finally {
       lock.releaseLock();
     }
 
-    return json({ ok: true });
+    if (!isAdmin) emailForReview(data, quote);
+    return json({ ok: true, pending: !isAdmin });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message ? err.message : err) });
   }
+}
+
+// ---------- Review ----------
+
+// Turn a row's "active" cell into a tick box with the given value
+function makeCheckbox(sheet, headers, row, checked) {
+  const col = headers.indexOf("active");
+  if (col === -1) return;
+  const cell = sheet.getRange(row, col + 1);
+  cell.insertCheckboxes();
+  cell.setValue(checked);
+}
+
+function emailForReview(data, quote) {
+  try {
+    const to = REVIEW_EMAIL || Session.getEffectiveUser().getEmail();
+    const from = text(data.contributor_name, 80) || "Someone";
+    const source = text(data.source_title, 300);
+    MailApp.sendEmail({
+      to: to,
+      subject: "Underline: new quote to review from " + from,
+      body:
+        "“" + quote + "”\n— " + from + (source ? "\nFrom: " + source : "") +
+        "\n\nTo publish it, tick \"active\" on its row. To reject it, delete the row.\n" +
+        SpreadsheetApp.getActiveSpreadsheet().getUrl()
+    });
+  } catch (err) {
+    // An email problem must never lose a quote; it's already saved in the sheet
+    console.error("Review email failed: " + err);
+  }
+}
+
+// Is this quote in the sheet, published or waiting? Used by the app when a save's reply gets lost.
+function checkQuote(quote) {
+  const sheet = getSheet();
+  const headers = getHeaders(sheet);
+  const quoteCol = headers.indexOf("quote");
+  const activeCol = headers.indexOf("active");
+  const lastRow = sheet.getLastRow();
+  if (quoteCol === -1 || lastRow < 2) return { ok: true, exists: false };
+  const target = normalize(quote);
+  const rows = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  const row = rows.find((r) => normalize(r[quoteCol]) === target);
+  if (!row) return { ok: true, exists: false };
+  return { ok: true, exists: true, active: activeCol === -1 || String(row[activeCol]).toUpperCase() === "TRUE" };
+}
+
+/**
+ * Run this once from the Apps Script editor (choose setupReview, then Run).
+ * It asks Google for permission to send review emails, turns the existing
+ * "active" column into tick boxes (keeping every current value), and sends a test email.
+ */
+function setupReview() {
+  const sheet = getSheet();
+  const headers = getHeaders(sheet);
+  const col = headers.indexOf("active");
+  const lastRow = sheet.getLastRow();
+  if (col !== -1 && lastRow >= 2) {
+    const range = sheet.getRange(2, col + 1, lastRow - 1, 1);
+    const values = range.getValues().map((r) => [String(r[0]).toUpperCase() === "TRUE"]);
+    range.insertCheckboxes();
+    range.setValues(values);
+  }
+  emailForReview({ contributor_name: "Underline", source_title: "Setup test" }, "Review emails are on. You'll get one like this for every quote a friend sends.");
 }
 
 // Visiting the web app URL in a browser shows this — handy to confirm the deployment works.
