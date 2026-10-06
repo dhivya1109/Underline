@@ -226,8 +226,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 
 async function getSettings() {
   const { name = "", socialLink = "" } = await chrome.storage.sync.get(["name", "socialLink"]);
+  const { adminCode = "" } = await chrome.storage.local.get("adminCode");
   const { endpoint = "", secret = "" } = self.UNDERLINE_CONFIG || {};
-  return { endpoint, secret, name, socialLink };
+  // The owner's admin code publishes straight away; everyone else's quotes wait for review
+  return { endpoint, secret: adminCode || secret, name, socialLink };
 }
 
 function isConfigured(settings) {

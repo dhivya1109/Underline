@@ -30,6 +30,15 @@
         </label>
       </section>
 
+      <section>
+        <h2>Admin</h2>
+        <label>
+          <span>Admin code <em>only for the sheet's owner</em></span>
+          <input id="adminCode" type="password" maxlength="200" autocomplete="off" placeholder="Leave empty unless you run Underline" />
+          <small>With it, your quotes go live straight away. Without it, quotes wait for the owner's review.</small>
+        </label>
+      </section>
+
       <div class="actions">
         <button type="submit">Save</button>
         <span id="status" role="status"></span>
@@ -53,6 +62,7 @@
 
     <p class="foot"><button type="button" id="shortcuts" class="link">Change the keyboard shortcut</button></p>
   </main>
+  <script src="config.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

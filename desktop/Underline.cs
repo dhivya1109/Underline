@@ -218,7 +218,8 @@ namespace Underline
         {
             var payload = new Dictionary<string, object>
             {
-                { "secret", Config.Secret },
+                // The owner's admin code publishes straight away; everyone else's quotes wait for review
+                { "secret", settings.AdminCode.Length > 0 ? settings.AdminCode : Config.Secret },
                 { "quote", quote },
                 { "contributor_name", settings.Name },
                 { "social_link", settings.LinkedIn },
@@ -239,6 +240,15 @@ namespace Underline
                 }
                 return new Result("error", data.ContainsKey("error") ? Convert.ToString(data["error"]) : "Something went wrong");
             });
+        }
+
+        // true = it's the admin code, false = it isn't, null = couldn't reach Google
+        public static bool? CheckAdminCode(string code)
+        {
+            Dictionary<string, object> data;
+            string problem = Post(new Dictionary<string, object> { { "ping", true }, { "secret", code } }, out data);
+            if (problem != null) return null;
+            return true.Equals(data.ContainsKey("ok") ? data["ok"] : null) && true.Equals(data.ContainsKey("admin") ? data["admin"] : null);
         }
 
         public static Result Ping()
@@ -321,6 +331,7 @@ namespace Underline
         public string Name = "";
         public string LinkedIn = "";
         public string Theme = "auto"; // auto | dark | light
+        public string AdminCode = ""; // only on the sheet owner's computer
 
         static string FolderPath
         {
@@ -345,6 +356,7 @@ namespace Underline
                 if (key == "name") s.Name = value;
                 else if (key == "linkedin") s.LinkedIn = value;
                 else if (key == "theme") s.Theme = value;
+                else if (key == "admin") s.AdminCode = value;
             }
             return s;
         }
@@ -356,7 +368,8 @@ namespace Underline
             {
                 "name=" + OneLine(Name),
                 "linkedin=" + OneLine(LinkedIn),
-                "theme=" + OneLine(Theme)
+                "theme=" + OneLine(Theme),
+                "admin=" + OneLine(AdminCode)
             }, Encoding.UTF8);
         }
 
@@ -789,7 +802,7 @@ namespace Underline
     class SettingsForm : CardForm
     {
         readonly Settings settings;
-        readonly TextBox name, linkedin;
+        readonly TextBox name, linkedin, adminCode;
         readonly ComboBox theme;
         readonly CheckBox startup;
         readonly Label status;
@@ -817,6 +830,8 @@ namespace Underline
             y = AddField("Name", name, pad, y, inner);
             linkedin = new TextBox { BorderStyle = BorderStyle.None, Text = settings.LinkedIn, MaxLength = 300 };
             y = AddField("LinkedIn profile (optional)", linkedin, pad, y, inner);
+            adminCode = new TextBox { BorderStyle = BorderStyle.None, Text = settings.AdminCode, MaxLength = 200, UseSystemPasswordChar = true };
+            y = AddField("Admin code (only for the sheet's owner)", adminCode, pad, y, inner);
 
             Controls.Add(MakeLabel("Appearance", pad, y));
             theme = new ComboBox
@@ -885,7 +900,7 @@ namespace Underline
             return field.Bottom + Px(14);
         }
 
-        void SaveSettings()
+        async void SaveSettings()
         {
             string n = name.Text.Trim();
             string link = linkedin.Text.Trim();
@@ -910,15 +925,33 @@ namespace Underline
                 return;
             }
 
+            // Check an admin code with the sheet before keeping it
+            string code = adminCode.Text.Trim();
+            if (code.Length > 0)
+            {
+                status.ForeColor = P.Muted;
+                status.Text = "Checking the admin code…";
+                bool? isAdmin = await Task.Run(() => Api.CheckAdminCode(code));
+                if (IsDisposed) return;
+                if (isAdmin != true)
+                {
+                    status.ForeColor = P.Err;
+                    status.Text = isAdmin == null ? "Couldn't reach Google to check the admin code" : "That isn't the admin code";
+                    adminCode.Focus();
+                    return;
+                }
+            }
+
             settings.Name = n;
             settings.LinkedIn = link;
             settings.Theme = ThemeValues[Math.Max(0, theme.SelectedIndex)];
+            settings.AdminCode = code;
             settings.Save();
             try { Settings.StartsWithWindows = startup.Checked; }
             catch (Exception) { } // a locked-down PC may block this; everything else still works
 
             status.ForeColor = P.Ok;
-            status.Text = "Saved — you're ready to underline";
+            status.Text = code.Length > 0 ? "Saved — admin: your quotes go live straight away" : "Saved — you're ready to underline";
         }
     }
 
