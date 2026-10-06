@@ -1,6 +1,6 @@
 // Keeps the app opening instantly and working offline. Quotes themselves are cached by app.js.
 // Bump VERSION whenever any of these files change so everyone gets the update.
-const VERSION = "underline-v4";
+const VERSION = "underline-v5";
 const FILES = [
   "./",
   "index.html",

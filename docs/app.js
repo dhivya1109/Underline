@@ -240,33 +240,37 @@ $("card").addEventListener("submit", async (e) => {
 
   saving = true;
   setCardStatus("Saving…");
-  const saved = (duplicate) => {
-    setCardStatus(duplicate ? "Already in the list" : "Underlined", "ok");
-    if (!duplicate) {
+  // pending: a friend's quote now waiting for the admin's review, so it isn't shown yet
+  const saved = ({ duplicate, pending }) => {
+    if (duplicate) setCardStatus("Already in the list", "ok");
+    else if (pending) setCardStatus("Sent for review ✓ It'll appear once approved", "ok");
+    else {
+      setCardStatus("Underlined", "ok");
       store.set("quotes", [...store.get("quotes", []), entry]);
       render(entry);
     }
-    setTimeout(closeCard, 900);
+    setTimeout(closeCard, pending ? 1600 : 900);
   };
   try {
-    const result = await call(entry);
-    saved(result.duplicate);
+    saved(await call(entry));
   } catch (err) {
-    if (err.unclear && (await isInSheet(quote))) return saved(false);
+    if (err.unclear) {
+      const found = await findInSheet(quote);
+      if (found) return saved({ pending: !found.active });
+    }
     saving = false;
     setCardStatus(err.message, "err");
   }
 });
 
-// After an unclear reply, look for the quote in the sheet to see whether the save went through
-async function isInSheet(quote) {
+// After an unclear reply, ask the sheet whether the save went through (published or waiting for review)
+async function findInSheet(quote) {
   setCardStatus("Checking…");
   try {
-    const data = await call({ action: "list" });
-    const target = quote.toLowerCase();
-    return (data.quotes || []).some((q) => clean(q.quote).toLowerCase() === target);
+    const data = await call({ action: "check", quote });
+    return data.exists ? data : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -478,8 +482,9 @@ $("settings").addEventListener("submit", async (e) => {
   store.set("code", code);
   settingsStatus.className = "status";
   settingsStatus.textContent = "Checking…";
+  let isAdmin = false;
   try {
-    await call({ ping: true });
+    isAdmin = Boolean((await call({ ping: true })).admin);
   } catch (err) {
     store.set("code", oldCode);
     return fail(err.message);
@@ -487,7 +492,7 @@ $("settings").addEventListener("submit", async (e) => {
 
   store.set("name", name);
   store.set("linkedin", linkedin);
-  settingsStatus.textContent = "Saved";
+  settingsStatus.textContent = isAdmin ? "Saved — admin: your quotes go live straight away" : "Saved";
   settingsStatus.className = "status ok";
 
   const firstRun = !store.get("quotes", []).length;
