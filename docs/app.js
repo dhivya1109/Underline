@@ -202,8 +202,6 @@ function openCard(text, source = { title: "", url: "" }, mode) {
   if (!isSetUp()) return openSettings();
   cardSource = source;
   cardText.value = clean(text);
-  linesEl.hidden = true;
-  linesEl.replaceChildren();
   $("card-mode").textContent = mode || (text ? "Review" : "Add a quote");
   $("card-source").textContent = source.title ? "From " + source.title : "";
   cardLayer.hidden = false;
@@ -276,7 +274,6 @@ document.addEventListener("paste", (e) => {
 // ---------- Screenshots ----------
 // The text is read on the device with Tesseract.js (open source); the image is never uploaded.
 
-const linesEl = $("card-lines");
 const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 let tesseractLoading = null;
 
@@ -302,40 +299,64 @@ async function readScreenshot(image, source = { title: "", url: "" }) {
   openCard("", source, "From screenshot");
   setCardStatus("Reading the screenshot… the first time takes a moment");
   try {
-    const Tesseract = await loadTesseract();
-    const { data } = await Tesseract.recognize(image, "eng");
+    const [Tesseract, prepared] = await Promise.all([loadTesseract(), prepareImage(image)]);
+    const { data } = await Tesseract.recognize(prepared, "eng");
     if (cardLayer.hidden) return; // closed while reading
-    // Keep real lines of text; drop clock times, battery levels and other screen clutter
+
+    // Keep lines the reader is confident about and that contain real words.
+    // This drops clock times, battery levels and garbled bits from photos.
     const lines = (data.lines || [])
+      .filter((line) => line.confidence >= MIN_LINE_CONFIDENCE)
       .map((line) => line.text.replace(/\s+/g, " ").trim())
       .filter((line) => (line.match(/[a-z]/gi) || []).length >= 3);
-    showLines(lines);
+
+    if (!lines.length) {
+      setCardStatus("Couldn't read clear text in that image — type the quote instead", "err");
+      return;
+    }
+
+    // Put the text straight in the box to check, trim and save
+    cardText.value = joinLines(lines);
+    showCount();
+    const n = clean(cardText.value).length;
+    if (n <= MAX_QUOTE_LENGTH) setCardStatus(`${n} / ${MAX_QUOTE_LENGTH} · check it, then Save`);
+    cardText.focus();
   } catch (err) {
     setCardStatus(err.message || "Couldn't read that image", "err");
   }
 }
 
-function showLines(lines) {
-  if (!lines.length) return setCardStatus("No text found in that image", "err");
-  const picked = new Set();
-  linesEl.replaceChildren(
-    ...lines.map((line, i) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = line;
-      button.setAttribute("aria-pressed", "false");
-      button.addEventListener("click", () => {
-        picked.has(i) ? picked.delete(i) : picked.add(i);
-        button.setAttribute("aria-pressed", String(picked.has(i)));
-        cardText.value = joinLines([...picked].sort((a, b) => a - b).map((n) => lines[n]));
-        showCount();
-      });
-      return button;
-    })
-  );
-  linesEl.hidden = false;
-  linesEl.scrollTop = 0;
-  setCardStatus("Tap the lines of your quote, then edit if needed");
+// Lines below this confidence (0-100) are mostly guesses
+const MIN_LINE_CONFIDENCE = 60;
+
+// Make the text easier to read: grey, high contrast, dark text on a light background,
+// and big enough. Screenshots in dark mode and photos of pages both read far better after this.
+async function prepareImage(image) {
+  const bitmap = await createImageBitmap(image);
+  const scale = Math.min(2, Math.max(1, 1600 / bitmap.width)); // upscale small images, never shrink
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = img.data;
+  let total = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    const grey = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    px[i] = px[i + 1] = px[i + 2] = grey;
+    total += grey;
+  }
+  const dark = total / (px.length / 4) < 128; // mostly dark: light text on a dark background
+  for (let i = 0; i < px.length; i += 4) {
+    let v = dark ? 255 - px[i] : px[i];
+    v = Math.max(0, Math.min(255, (v - 128) * 1.5 + 128)); // boost contrast
+    px[i] = px[i + 1] = px[i + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
 }
 
 // Join lines back into one sentence, mending words split with a hyphen at a line break

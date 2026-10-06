@@ -217,28 +217,6 @@ main {
 
 @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-/* Lines read from a screenshot */
-.lines {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 38vh;
-  overflow-y: auto;
-  margin-bottom: 10px;
-}
-.lines[hidden] { display: none; }
-.lines button {
-  text-align: left;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: none;
-  font-size: 14px;
-  line-height: 1.35;
-  cursor: pointer;
-}
-.lines button[aria-pressed="true"] { background: var(--fg); color: var(--card); border-color: var(--fg); }
-
 .drop-hint {
   position: fixed;
   inset: 16px;

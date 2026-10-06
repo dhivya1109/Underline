@@ -31,7 +31,7 @@ One app for every device, in [`docs/`](docs/). It's a web app that installs like
 - **Laptop (Chrome or Edge):** open the link and click the install icon in the address bar. To save a quote, copy it anywhere, open Underline and press **Ctrl+V**.
 - **Android:** open the link, then browser menu → **Install app**. Select text in any app → **Share** → **Underline**.
 - **iPhone:** open the link in Safari, then **Share** → **Add to Home Screen**. To save, tap **Underline.** → **Add a quote** (paste text) or **Add from screenshot**.
-- **Screenshots:** share one to Underline (Android), choose **Add from screenshot**, or paste or drag one in on a laptop. The text is read on the device with [Tesseract.js](https://tesseract.projectnaptha.com/), so the image is never uploaded. Tap the lines that make up the quote.
+- **Screenshots:** share one to Underline (Android), choose **Add from screenshot**, or paste or drag one in on a laptop. The text is read on the device with [Tesseract.js](https://tesseract.projectnaptha.com/), so the image is never uploaded. The text appears in the box to check, trim and save.
 
 Tap a quote to see the next one. Tap a name to open their LinkedIn.
 
